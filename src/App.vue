@@ -1,20 +1,28 @@
 <template>
 
-  <div class="main-app">
-    <div class="app-toolbar" data-tauri-drag-region>
-      123
-    </div>
+
+  <div class="app-toolbar" data-tauri-drag-region>
+    <div class="app-title">Color Picker</div>
+    <flex-spacer></flex-spacer>
+    <div>123</div>
   </div>
+
+  <flex-spacer></flex-spacer>
+  <img class="picker-button" src="./assets/picker_icon.svg"
+    @click="startColorPicker" />
+  <flex-spacer></flex-spacer>
+  <div>123</div>
 </template>
 
 <script setup lang="ts">
-// This starter template is using Vue 3 <script setup> SFCs
-// Check out https://vuejs.org/api/sfc-script-setup.html#script-setup
-import HelloWorld from './components/HelloWorld.vue'
 import { availableMonitors, getCurrent, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window"
-
+import FlexSpacer from "./components/FlexSpacer.vue"
 
 const qwe = availableMonitors()
+
+async function startColorPicker() {
+  console.log("qwe")
+}
 // const currentWindow = getCurrent()
 
 // await currentWindow.setFocus()
@@ -30,16 +38,27 @@ const qwe = availableMonitors()
 
 
 <style scoped>
-.main-app {
-  display: flex;
-  flex-direction: column;
+.picker-button {
+  width: 80%;
+}
+
+.app-title {
+  pointer-events: none;
+  padding-left: 4px;
 }
 
 .app-toolbar {
-  height: 36px;
-  min-height: 36px;
-  max-height: 36px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
 
-  background: green;
+
+  --toolbar-height: 26px;
+
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
+  max-height: var(--toolbar-height);
+
+  width: 100%;
 }
 </style>
