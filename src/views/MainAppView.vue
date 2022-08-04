@@ -6,7 +6,8 @@
             <icon class="close-btn" icon="ep:close-bold"></icon>
         </div>
         <flex-spacer></flex-spacer>
-        <icon class="color-picker-btn" icon="pepicons:color-picker"></icon>
+        <icon @click="startColorPicker" class="color-picker-btn"
+            icon="pepicons:color-picker"></icon>
         <flex-spacer></flex-spacer>
     </div>
 </template>
@@ -14,9 +15,11 @@
 <script setup lang="ts">
 import FlexSpacer from '../components/FlexSpacer.vue';
 import { Icon } from '@iconify/vue';
+import { emit, listen } from '@tauri-apps/api/event'
+
 
 function startColorPicker() {
-
+    emit("start_color_picker", "Hello from Vue!")
 }
 </script>
 <style scoped>
