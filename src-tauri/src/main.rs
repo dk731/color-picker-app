@@ -3,36 +3,43 @@
     windows_subsystem = "windows"
 )]
 
-extern crate scrap;
+use screenshots::Screen;
+use std::{fs, time::Instant};
 
-use scrap::Display;
 use tauri::{Event, Manager};
 
-fn on_color_picker_start(event: Event) {
-    println!("Received start_color_picker event: {:?}", event.payload());
-}
-
 fn main() {
-    let displays = Display::all().unwrap_or(vec![]);
+    // let displays = Display::all().unwrap_or(vec![]);
 
-    if displays.len() == 0 {
-        println!("Was not able to accuqire displays instances");
-    }
-
-    for (i, display) in displays.iter().enumerate() {
-        println!(
-            "Display {} [{}x{}]",
-            i + 1,
-            display.width(),
-            display.height()
-        );
-    }
+    // if displays.len() == 0 {
+    //     println!("Was not able to accuqire displays instances");
+    // }
 
     tauri::Builder::default()
         .setup(|app| {
             //
+            // let localDisplays = displays;
 
-            app.listen_global("start_color_picker", on_color_picker_start);
+            app.listen_global("start_color_picker", |event: Event| {
+                println!("Received start_color_picker event: {:?}", event.payload());
+
+                let screens = Screen::all().unwrap();
+
+                println!("Received Screens: {}", screens.len());
+
+                for screen in screens {
+                    println!("Starting Screen capture {:?}", screen.display_info.id);
+                    let mut image = screen.capture().unwrap();
+
+                    let mut buffer = image.buffer();
+                    fs::write(
+                        format!("{}.png", screen.display_info.id.to_string()),
+                        &buffer,
+                    )
+                    .unwrap();
+                    println!("Finished Screen capture {:?}\n", screen.display_info.id);
+                }
+            });
 
             Ok(())
         })
