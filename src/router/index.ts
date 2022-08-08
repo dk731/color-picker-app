@@ -12,6 +12,11 @@ const router = createRouter({
       name: "MainApp",
       component: () => import("../views/MainAppView.vue"),
     },
+    {
+      path: "/color_pick",
+      name: "ColorPick",
+      component: () => import("../views/ColorPickingView.vue"),
+    },
   ],
 });
 
