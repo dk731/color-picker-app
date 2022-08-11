@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 
 type ColorPickDisplayData = {
   id: string;
-  buffer: number[];
+  buffer: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
 };

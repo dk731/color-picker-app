@@ -5,7 +5,7 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "main_app",
+      redirect: "color_pick",
     },
     {
       path: "/main_app",

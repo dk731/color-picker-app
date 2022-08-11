@@ -52,10 +52,11 @@ function startColorPicker() {
         size: new PhysicalSize(130, 180),
       };
       windowMeta["MainApp"] = newWindow;
-      invoke("start_color_picking").then((res: any) => {
-        colorPickData.displays = res;
-        router.replace({ name: "ColorPick" });
-      });
+      // invoke("start_color_picking").then((res: any) => {
+      //   colorPickData.displays = res;
+      //   router.replace({ name: "ColorPick" });
+      // });
+      router.replace({ name: "ColorPick" });
     });
 }
 </script>
