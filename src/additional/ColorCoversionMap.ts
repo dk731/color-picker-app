@@ -1,7 +1,7 @@
 import convert from "color-convert";
 import { RGB } from "color-convert/conversions";
 
-type ConversionMeta = {
+export type ConversionMeta = {
   displayName: string;
   converter: (color: RGB) => any;
   altConverter: (color: RGB) => any;

@@ -6,10 +6,14 @@
     :onkeyup="onKeyUp"
     tabindex="0"
   >
-    <div v-for="converter in colorConversionMap" class="color-result">
+    <div
+      v-for="converter in colorConversionMap"
+      class="color-result"
+      v-on:click="(e) => onResultClick(e, converter)"
+    >
       <div>{{ converter.displayName }}</div>
       <flex-spacer></flex-spacer>
-      <div>
+      <div class="color-result-value">
         {{
           isSpecialActive
             ? converter.altConverter(activeColor)
@@ -21,25 +25,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineProps, onMounted } from "vue";
-import { register, unregisterAll } from "@tauri-apps/api/globalShortcut";
+import { ref, defineProps } from "vue";
 
 import { RGB } from "color-convert/conversions";
 
-import colorConversionMap from "../additional/ColorCoversionMap";
+import colorConversionMap, {
+  ConversionMeta,
+} from "../additional/ColorCoversionMap";
 import FlexSpacer from "./FlexSpacer.vue";
+
+import {
+  getCurrent,
+  PhysicalSize,
+  PhysicalPosition,
+} from "@tauri-apps/api/window";
+
+getCurrent().setSize(new PhysicalSize(220, 400));
 
 const isSpecialActive = ref<boolean>(false);
 const colorHolderRef = ref<HTMLDivElement>(null as any);
 
-const { activeColor } = defineProps<{ activeColor: RGB }>();
+const { activeColor, onColorCopyCallback } = defineProps<{
+  activeColor: RGB;
+  onColorCopyCallback?: (copyText: string) => void;
+}>();
 
 function onKeyDown(e: KeyboardEvent) {
-  console.log(e);
   if (e.key == "Shift") isSpecialActive.value = true;
 }
 function onKeyUp(e: KeyboardEvent) {
   if (e.key == "Shift") isSpecialActive.value = false;
+}
+
+function onResultClick(e: MouseEvent, conv: ConversionMeta) {
+  const copyText = "Test";
+  const clickDiv = e.target as HTMLDivElement;
+
+  // Ignore click if div is in animation
+  if (clickDiv.classList.contains("dont-hover")) return;
+
+  clickDiv.classList.add("result-clicked", "slow-transition", "dont-hover");
+  setTimeout(() => {
+    clickDiv.classList.remove("result-clicked");
+    setTimeout(
+      () => clickDiv.classList.remove("slow-transition", "dont-hover"),
+      350
+    );
+  }, 350);
+
+  navigator.clipboard.writeText(copyText); // Copy selected color to clipboard
+  if (onColorCopyCallback) onColorCopyCallback(copyText);
 }
 </script>
 
@@ -60,7 +95,38 @@ function onKeyUp(e: KeyboardEvent) {
   align-items: center;
   justify-content: center;
 
+  background-color: rgb(13, 129, 231);
+  padding-left: 3px;
+  padding-right: 3px;
+
+  border: none;
+  border-radius: 3px;
+
   margin-bottom: 5px;
+
+  transition: all 0.1s;
+}
+
+.color-result * {
+  pointer-events: none;
+}
+
+.color-result.slow-transition {
+  transition: all 0.35s;
+}
+
+.result-clicked {
+  transform: scale(0.9);
+  background-color: red;
+}
+
+.color-result:not(.dont-hover):hover {
+  transform: scale(1.1);
+  background-color: aqua;
+}
+
+.color-result:not(.dont-hover):hover .color-result-value {
+  font-weight: bold;
 }
 
 .result-color-display {
