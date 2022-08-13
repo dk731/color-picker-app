@@ -1,26 +1,39 @@
 <template>
   <canvas
+    class="color-pick-canvas"
+    ref="baseCanvasRef"
     v-on:mousemove="onMouseMove"
     v-on:mouseenter="onMouseMove"
-    class="color-pick-canvas"
-    id="pick-canvas"
-    ref="canvasRef"
   ></canvas>
   <div
-    class="picker-lens"
-    :style="{ left: `${cursorPos.x}px`, top: `${cursorPos.y}px` }"
+    class="picker-magnifier"
+    :style="{
+      left: `${magnifierPosition.x}px`,
+      top: `${magnifierPosition.y}px`,
+    }"
   >
-    <icon class="picker-lens-cursor" icon="radix-icons:crosshair-2"></icon>
-    <div class="picker-panel">
+    <icon class="magnifier-cursor" icon="radix-icons:crosshair-2"></icon>
+    <div class="magnifier-panel">
       <flex-spacer />
-      <div class="picker-mgnifier-lens" ref="magnifierRef"></div>
+      <div class="magnifier-panel-holder">
+        <canvas class="magnifier-lens" ref="magnifierLensCanvasRef"></canvas>
+        <div
+          class="magnifier-lens-grid"
+          :style="{
+            backgroundSize: `${magnifierGridSize}px ${magnifierGridSize}px`,
+          }"
+        ></div>
+        <div
+          class="magnifier-active-highligh"
+          :style="{
+            width: `${magnifierGridSize}px`,
+            height: `${magnifierGridSize}px`,
+          }"
+        ></div>
+      </div>
       <flex-spacer />
     </div>
   </div>
-  <!-- <picker-lens
-    :ctx="canvasRef?.getContext('2d')"
-    :position="cursorPos"
-  ></picker-lens> -->
 </template>
 
 <script setup lang="ts">
@@ -40,10 +53,17 @@ unregisterAll().then(() =>
   register("Esc", (short) => router.replace({ name: "MainApp" }))
 );
 
-const canvasRef = ref<HTMLCanvasElement>(null as any);
-const magnifierRef = ref<HTMLDivElement>(null as any);
-const cursorPos = ref<{ x: number; y: number }>({ x: 0, y: 0 });
-const magnifierKoef = ref<number>(1);
+// Define base magnifier sizes
+const BASE_MAGNIFIER_PIXELS = 9;
+
+const baseCanvasRef = ref<HTMLCanvasElement>(null as any);
+
+// On base canvas mouse move (as canvas is fullscreen -> global mouse listener)
+const onMouseMove = ref<(e: MouseEvent) => void>();
+
+const magnifierLensCanvasRef = ref<HTMLCanvasElement>(null as any);
+const magnifierGridSize = ref<number>(0);
+const magnifierPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 
 // const colorPickData = useColorPickData();
 const colorPickData = {
@@ -52,20 +72,20 @@ const colorPickData = {
       id: "test1",
       position: { x: 0, y: 0 },
       size: { width: 2560, height: 1440 },
-      buffer: "src/assets/disp_1.png",
+      buffer: "public/disp_1.png",
     },
     {
       id: "test2",
       position: { x: 2560, y: 0 },
       size: { width: 2560, height: 1440 },
-      buffer: "src/assets/disp_2.png",
+      buffer: "public/disp_2.png",
     },
   ],
 };
 
 const leftUpper = new PhysicalPosition(Infinity, Infinity);
 const rightBottom = new PhysicalPosition(-Infinity, -Infinity);
-
+const tauriScreen = getCurrent();
 colorPickData.displays?.forEach((display) => {
   if (leftUpper.x > display.position.x) leftUpper.x = display.position.x;
   if (leftUpper.y > display.position.y) leftUpper.y = display.position.y;
@@ -74,40 +94,62 @@ colorPickData.displays?.forEach((display) => {
   if (rightBottom.y < display.position.y + display.size.height)
     rightBottom.y = display.position.y + display.size.height;
 });
-getCurrent().setSize(
-  new PhysicalSize(rightBottom.x - leftUpper.x, rightBottom.y - leftUpper.y)
-);
-getCurrent().setPosition(leftUpper);
+const baseCanvasSize = {
+  width: rightBottom.x - leftUpper.x,
+  height: rightBottom.y - leftUpper.y,
+};
 
-const onMouseMove = ref<(e: MouseEvent) => void>();
+// Set screen size to be fullscreen on all displays
+tauriScreen.setSize(
+  new PhysicalSize(baseCanvasSize.width, baseCanvasSize.height)
+);
+tauriScreen.setPosition(leftUpper);
 
 onMounted(() => {
-  const ctx = canvasRef.value.getContext("2d")!;
-  const magEl = magnifierRef.value;
-
+  // Setup base canvas for displaying all captured screenshots
+  const baseCtx = baseCanvasRef.value.getContext("2d")!;
   const canvasWidth = rightBottom.x - leftUpper.x;
   const canvasHeight = rightBottom.y - leftUpper.y;
 
-  ctx.canvas.width = canvasWidth;
-  ctx.canvas.height = canvasHeight;
+  baseCtx.canvas.width = canvasWidth;
+  baseCtx.canvas.height = canvasHeight;
 
+  // Setup magnifier canvas
+  const magnifierEl = magnifierLensCanvasRef.value;
+  const mgnifierCtx = magnifierEl.getContext("2d")!;
+
+  mgnifierCtx.canvas.width = magnifierEl.offsetWidth;
+  mgnifierCtx.canvas.height = magnifierEl.offsetHeight;
+  mgnifierCtx.imageSmoothingEnabled = false; // Enable pixelated view
+
+  magnifierGridSize.value = magnifierEl.offsetWidth / BASE_MAGNIFIER_PIXELS;
+
+  // Register base canvas mouse move events
   onMouseMove.value = (e: MouseEvent) => {
-    cursorPos.value = { x: e.x, y: e.y };
+    // Update magnifier position to move html elements
+    magnifierPosition.value = { x: e.x, y: e.y };
 
-    const pos = `${-e.x * magnifierKoef.value + magEl.offsetWidth / 2}px ${
-      -e.y * magnifierKoef.value + magEl.offsetHeight / 2
-    }px`;
-
-    magEl.style.backgroundPosition = pos;
-    console.log(pos);
+    // Copy interested base rect to magnifier canvas
+    mgnifierCtx.drawImage(
+      baseCtx.canvas,
+      Math.ceil(e.x - BASE_MAGNIFIER_PIXELS / 2),
+      Math.ceil(e.y - BASE_MAGNIFIER_PIXELS / 2),
+      BASE_MAGNIFIER_PIXELS,
+      BASE_MAGNIFIER_PIXELS,
+      0,
+      0,
+      magnifierEl.offsetWidth,
+      magnifierEl.offsetHeight
+    );
   };
 
+  // Promise to wait for all screens to render to base canvas
   Promise.all(
     colorPickData.displays.map(async (item, i) => {
       const tmpImage = new Image();
       const syncPromise = new Promise<void>((resolve) => {
         tmpImage.onload = () => {
-          ctx.drawImage(tmpImage, item.position.x, item.position.y);
+          baseCtx.drawImage(tmpImage, item.position.x, item.position.y);
           resolve();
         };
         tmpImage.src = item.buffer;
@@ -115,13 +157,7 @@ onMounted(() => {
 
       await syncPromise;
     })
-  ).then(() => {
-    magEl.style.backgroundImage = `url(${ctx.canvas.toDataURL()})`;
-    magEl.style.backgroundRepeat = "no-repeat";
-    magEl.style.backgroundSize = `${ctx.canvas.width * magnifierKoef.value}px ${
-      ctx.canvas.height * magnifierKoef.value
-    }px;`;
-  });
+  ).then(() => console.log("Finished copying all screenshots"));
 });
 </script>
 
@@ -135,13 +171,13 @@ onMounted(() => {
   cursor: none;
 }
 
-.picker-lens,
-.picker-lens * {
+.picker-magnifier,
+.picker-magnifier * {
   cursor: none;
   pointer-events: none;
 }
 
-.picker-lens {
+.picker-magnifier {
   --crosshair-size: 30px;
 
   position: absolute;
@@ -149,7 +185,7 @@ onMounted(() => {
   cursor: none;
 }
 
-.picker-lens-cursor {
+.magnifier-cursor {
   position: relative;
   top: 0;
   left: 0;
@@ -158,7 +194,7 @@ onMounted(() => {
   height: var(--crosshair-size);
 }
 
-.picker-panel {
+.magnifier-panel {
   position: absolute;
   padding: 10px;
 
@@ -168,16 +204,68 @@ onMounted(() => {
   width: 150px;
   height: 200px;
 
-  background-color: red;
+  background-color: rgba(255, 0, 0, 0.222);
 
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.picker-mgnifier-lens {
-  width: 80%;
-  aspect-ratio: 1;
-  /* border-radius: 50%; */
+.magnifier-panel-holder {
+  width: 150px;
+  height: 150px;
+
+  border-radius: 50%;
+  position: relative;
+
+  overflow: hidden;
+}
+
+.magnifier-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  width: 100%;
+  height: 100%;
+
+  z-index: 10;
+}
+
+.magnifier-lens-grid {
+  --magnifier-lens-grid-color: rgba(255, 255, 255, 0.2);
+
+  position: absolute;
+
+  /* Set -1 to hide first grid line */
+  left: -1px;
+  top: -1px;
+
+  width: 100%;
+  height: 100%;
+
+  background-image: repeating-linear-gradient(
+      var(--magnifier-lens-grid-color) 0 1px,
+      transparent 1px 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--magnifier-lens-grid-color) 0 1px,
+      transparent 1px 100%
+    );
+
+  z-index: 11;
+}
+
+.magnifier-active-highligh {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  border: 2px solid rgba(255, 255, 255, 1);
+  box-sizing: border-box;
+
+  z-index: 12;
 }
 </style>
