@@ -14,7 +14,6 @@
   >
     <icon class="magnifier-cursor" icon="radix-icons:crosshair-2"></icon>
     <div class="magnifier-panel">
-      <flex-spacer />
       <div class="magnifier-panel-holder">
         <canvas class="magnifier-lens" ref="magnifierLensCanvasRef"></canvas>
         <div
@@ -31,6 +30,17 @@
           }"
         ></div>
       </div>
+      <div class="active-color-result">
+        <div>Current Color:</div>
+        <flex-spacer />
+        <div
+          class="magnifier-result-color-display"
+          :style="{
+            backgroundColor: `rgb(${activeColor[0]}, ${activeColor[1]}, ${activeColor[2]})`,
+          }"
+        />
+      </div>
+      <color-result :active-color="activeColor"></color-result>
       <flex-spacer />
     </div>
   </div>
@@ -48,13 +58,15 @@ import { register, unregisterAll } from "@tauri-apps/api/globalShortcut";
 import { onMounted, ref } from "vue";
 import { Icon } from "@iconify/vue";
 import FlexSpacer from "../components/FlexSpacer.vue";
+import ColorResult from "../components/ColorResult.vue";
+import { RGB } from "color-convert/conversions";
 
 unregisterAll().then(() =>
   register("Esc", (short) => router.replace({ name: "MainApp" }))
 );
 
 // Define base magnifier sizes
-const BASE_MAGNIFIER_PIXELS = 9;
+const BASE_MAGNIFIER_PIXELS = 11;
 
 const baseCanvasRef = ref<HTMLCanvasElement>(null as any);
 
@@ -64,6 +76,8 @@ const onMouseMove = ref<(e: MouseEvent) => void>();
 const magnifierLensCanvasRef = ref<HTMLCanvasElement>(null as any);
 const magnifierGridSize = ref<number>(0);
 const magnifierPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 });
+
+const activeColor = ref<RGB>([0, 0, 0]);
 
 // const colorPickData = useColorPickData();
 const colorPickData = {
@@ -116,32 +130,15 @@ onMounted(() => {
 
   // Setup magnifier canvas
   const magnifierEl = magnifierLensCanvasRef.value;
-  const mgnifierCtx = magnifierEl.getContext("2d")!;
+  const magnifierCtx = magnifierEl.getContext("2d")!;
 
-  mgnifierCtx.canvas.width = magnifierEl.offsetWidth;
-  mgnifierCtx.canvas.height = magnifierEl.offsetHeight;
-  mgnifierCtx.imageSmoothingEnabled = false; // Enable pixelated view
+  const centerPosition = Math.round(magnifierEl.offsetWidth / 2);
+
+  magnifierCtx.canvas.width = magnifierEl.offsetWidth;
+  magnifierCtx.canvas.height = magnifierEl.offsetHeight;
+  magnifierCtx.imageSmoothingEnabled = false; // Enable pixelated view
 
   magnifierGridSize.value = magnifierEl.offsetWidth / BASE_MAGNIFIER_PIXELS;
-
-  // Register base canvas mouse move events
-  onMouseMove.value = (e: MouseEvent) => {
-    // Update magnifier position to move html elements
-    magnifierPosition.value = { x: e.x, y: e.y };
-
-    // Copy interested base rect to magnifier canvas
-    mgnifierCtx.drawImage(
-      baseCtx.canvas,
-      Math.ceil(e.x - BASE_MAGNIFIER_PIXELS / 2),
-      Math.ceil(e.y - BASE_MAGNIFIER_PIXELS / 2),
-      BASE_MAGNIFIER_PIXELS,
-      BASE_MAGNIFIER_PIXELS,
-      0,
-      0,
-      magnifierEl.offsetWidth,
-      magnifierEl.offsetHeight
-    );
-  };
 
   // Promise to wait for all screens to render to base canvas
   Promise.all(
@@ -157,11 +154,48 @@ onMounted(() => {
 
       await syncPromise;
     })
-  ).then(() => console.log("Finished copying all screenshots"));
+  ).then(() => {
+    // Get base canvas in bytes array form, to read pixel values
+    const baseCanvasCache = baseCtx.getImageData(
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+      { colorSpace: "srgb" }
+    ).data;
+
+    // Register base canvas mouse move events
+    onMouseMove.value = (e: MouseEvent) => {
+      // Update magnifier position to move html elements
+      magnifierPosition.value = { x: e.x, y: e.y };
+
+      // Copy interested base rect to magnifier canvas
+      magnifierCtx.drawImage(
+        baseCtx.canvas,
+        Math.ceil(e.x - BASE_MAGNIFIER_PIXELS / 2),
+        Math.ceil(e.y - BASE_MAGNIFIER_PIXELS / 2),
+        BASE_MAGNIFIER_PIXELS,
+        BASE_MAGNIFIER_PIXELS,
+        0,
+        0,
+        magnifierEl.offsetWidth,
+        magnifierEl.offsetHeight
+      );
+
+      // Get current color
+      const globalStartByte = (e.x + e.y * canvasWidth) * 4; // Each pixel is 4 bytes (rgba)
+      activeColor.value = [
+        baseCanvasCache[globalStartByte + 0],
+        baseCanvasCache[globalStartByte + 1],
+        baseCanvasCache[globalStartByte + 2],
+      ];
+    };
+    console.log("Finished copying all screenshots");
+  });
 });
 </script>
 
-<style>
+<style scoped>
 .color-pick-canvas {
   width: 100%;
   height: 100%;
@@ -202,9 +236,9 @@ onMounted(() => {
   left: calc(var(--crosshair-size) / 2 + 5px);
 
   width: 150px;
-  height: 200px;
+  height: 400px;
 
-  background-color: rgba(255, 0, 0, 0.222);
+  background-color: rgb(130, 130, 130);
 
   display: flex;
   flex-direction: column;
@@ -214,11 +248,15 @@ onMounted(() => {
 .magnifier-panel-holder {
   width: 150px;
   height: 150px;
+  min-width: 150px;
+  min-height: 150px;
 
-  border-radius: 50%;
+  border-radius: 5px;
   position: relative;
 
   overflow: hidden;
+
+  margin-bottom: 10px;
 }
 
 .magnifier-lens {
