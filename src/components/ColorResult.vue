@@ -6,6 +6,16 @@
     :onkeyup="onKeyUp"
     tabindex="0"
   >
+    <div class="color-result">
+      <div>Current Color:</div>
+      <flex-spacer />
+      <div
+        class="result-color-display"
+        :style="{
+          backgroundColor: `rgb(${activeColor[0]}, ${activeColor[1]}, ${activeColor[2]})`,
+        }"
+      />
+    </div>
     <div
       v-for="converter in colorConversionMap"
       class="color-result"
@@ -40,7 +50,7 @@ import {
   PhysicalPosition,
 } from "@tauri-apps/api/window";
 
-getCurrent().setSize(new PhysicalSize(220, 400));
+// getCurrent().setSize(new PhysicalSize(220, 400));
 
 const isSpecialActive = ref<boolean>(false);
 const colorHolderRef = ref<HTMLDivElement>(null as any);

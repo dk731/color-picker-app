@@ -1,10 +1,10 @@
 <template>
-  <!-- <router-view></router-view> -->
-  <div
+  <router-view></router-view>
+  <!-- <div
     :style="{ height: '20px', background: 'red' }"
     data-tauri-drag-region
   ></div>
-  <color-result :active-color="[100, 200, 55]"></color-result>
+  <color-result :active-color="[100, 200, 55]"></color-result> -->
 </template>
 
 <script setup lang="ts">
