@@ -6,15 +6,25 @@
     v-on:mouseenter="onMouseMove"
     v-on:mousewheel="onMouseZoom"
     v-on:contextmenu="onContextClick"
+    v-on:click="onPickFinish"
+    :style="{ cursor: isColorFinish ? 'default' : 'none' }"
   ></canvas>
   <div
     class="picker-magnifier"
     :style="{
       left: `${magnifierPosition.x}px`,
       top: `${magnifierPosition.y}px`,
+      pointerEvents: isColorFinish ? 'all' : 'none',
+      cursor: isColorFinish ? 'default' : 'none',
     }"
   >
     <icon class="magnifier-cursor" icon="radix-icons:crosshair-2"></icon>
+    <svg viewBox="0 0 60 50" width="60" class="movement-path">
+      <path
+        id="panel-position-path"
+        d="M52,0H8C3.6,0,0,3.6,0,8v34c0,4.4,3.6,8,8,8h44c4.4,0,8-3.6,8-8V8C60,3.6,56.4,0,52,0L52,0z"
+      />
+    </svg>
     <div class="magnifier-panel">
       <div class="magnifier-panel-holder">
         <canvas class="magnifier-lens" ref="magnifierLensCanvasRef"></canvas>
@@ -27,16 +37,18 @@
         <div
           class="magnifier-active-highligh"
           :style="{
-            left: `${Math.floor(
+            left: `${
               Math.floor(magnifierHighlighPosition.x / magnifierGridSize) *
-                magnifierGridSize
-            )}px`,
+                magnifierGridSize -
+              0.5
+            }px`,
             top: `${
               Math.floor(magnifierHighlighPosition.y / magnifierGridSize) *
-              magnifierGridSize
+                magnifierGridSize -
+              0.5
             }px`,
-            width: `${magnifierGridSize}px`,
-            height: `${magnifierGridSize}px`,
+            width: `${magnifierGridSize + 1}px`,
+            height: `${magnifierGridSize + 1}px`,
             borderColor: `rgb(${magnifierHighlighColor.join(', ')})`,
           }"
         ></div>
@@ -50,6 +62,7 @@
     class="picker-events-overlay"
     v-on:mousemove="onPreciseMouseMove"
     v-on:contextmenu="onContextClick"
+    v-on:click="onPickFinish"
   ></div>
 </template>
 
@@ -69,6 +82,7 @@ import ColorResult from "../components/ColorResult.vue";
 import { RGB } from "color-convert/conversions";
 import { invoke } from "@tauri-apps/api/tauri";
 import converter from "color-convert";
+import gsap from "gsap";
 
 unregisterAll().then(() =>
   register("Esc", (short) => router.replace({ name: "MainApp" }))
@@ -80,11 +94,14 @@ const magnifierViewSize = ref<number>(11);
 const baseCanvasRef = ref<HTMLCanvasElement>(null as any);
 
 // On base canvas mouse move (as canvas is fullscreen -> global mouse listener)
+const CANVAS_SIZE = 170;
 const onMouseMove = ref<(e: MouseEvent) => void>();
 
 const magnifierLensCanvasRef = ref<HTMLCanvasElement>(null as any);
 const magnifierGridSize = ref<number>(0);
 const magnifierPosition = ref<Coord2D>({ x: 0, y: 0 });
+
+const magnifierPanelPosition = ref<Coord2D>({ x: 20, y: 20 });
 
 const magnifierHighlighPosition = ref<Coord2D>({ x: 0, y: 0 });
 const magnifierHighlighColor = ref<RGB>([255, 255, 255]);
@@ -93,6 +110,12 @@ const activeColor = ref<RGB>([0, 0, 0]);
 
 const preciseSensivity = ref<number>(0.3);
 const isPreciesActive = ref<boolean>(false);
+const isColorFinish = ref<boolean>(false);
+
+// Scoped CSS binds
+const styles = {
+  canvasSize: `${CANVAS_SIZE}px`,
+};
 
 // const colorPickData = useColorPickData();
 const colorPickData = {
@@ -158,7 +181,44 @@ function updateActiveColor(currentPosition: Coord2D) {
   ];
 }
 
+function resetPrecisePosition() {
+  magnifierHighlighPosition.value = {
+    x: magnifierLensCanvasRef.value.offsetWidth / 2,
+    y: magnifierLensCanvasRef.value.offsetHeight / 2,
+  };
+}
+
+var previousTween: gsap.core.Tween;
+const halfArc = Math.PI * 2;
+const pathLength = Math.PI * 2 * 8 + 88 + 68;
+const SNAP_POINTS = [
+  44 + halfArc,
+  44 + halfArc * 3 + 34,
+  44 + halfArc * 5 + 34 + 44,
+  44 + halfArc * 7 + 34 + 44 + 34,
+].map((el) => el / pathLength);
+
+function updateMagnifierPanelPosition(newPosition: Coord2D) {
+  if (previousTween) previousTween.kill();
+  const ind = Math.floor(Math.random() * 4);
+  previousTween = gsap.to(".magnifier-panel", {
+    duration: 2,
+    ease: "power1.inOut",
+    repeat: 100,
+    repeatDelay: 1,
+    motionPath: {
+      path: "#panel-position-path",
+      align: "#panel-position-path",
+      start: 0,
+      end: SNAP_POINTS[3] - 1,
+    },
+  });
+}
+
 onMounted(() => {
+  const pathRef = document.getElementById("panel-position-path");
+  console.log(pathRef);
+
   // Setup base canvas for displaying all captured screenshots
   const baseCtx = baseCanvasRef.value.getContext("2d")!;
 
@@ -173,10 +233,8 @@ onMounted(() => {
   magnifierCtx.canvas.height = magnifierEl.offsetHeight;
   magnifierCtx.imageSmoothingEnabled = false; // Enable pixelated view
 
-  magnifierHighlighPosition.value = {
-    x: magnifierEl.offsetWidth / 2,
-    y: magnifierEl.offsetHeight / 2,
-  };
+  resetPrecisePosition();
+
   magnifierGridSize.value =
     magnifierLensCanvasRef.value.offsetWidth / magnifierViewSize.value;
 
@@ -209,11 +267,14 @@ onMounted(() => {
     // Register base canvas mouse move events
     onMouseMove.value = (e: MouseEvent) => {
       // Do not move magnifier if precies mode is ON
-      if (isPreciesActive.value) return;
+      if (isPreciesActive.value || isColorFinish.value) return;
 
       // Update magnifier position to move html elements
-      magnifierPosition.value = { x: e.x, y: e.y };
+      const newPosition = { x: e.x, y: e.y };
+      magnifierPosition.value = newPosition;
       const magnifierRounded = Math.round(magnifierViewSize.value / 2);
+
+      updateMagnifierPanelPosition(newPosition);
 
       // Copy interested base rect to magnifier canvas
       magnifierCtx.drawImage(
@@ -237,8 +298,8 @@ onMounted(() => {
 function onMouseZoom(e: WheelEvent) {
   var newValue = magnifierViewSize.value + Math.sign(e.deltaY) * 2;
 
-  if (newValue < 1) newValue = 1;
-  else if (newValue > 51) newValue = 51;
+  if (newValue < 3) newValue = 3;
+  else if (newValue > 21) newValue = 21;
 
   magnifierViewSize.value = newValue;
   magnifierGridSize.value = magnifierLensCanvasRef.value.offsetWidth / newValue;
@@ -250,16 +311,16 @@ function onContextClick(e: MouseEvent) {
   e.preventDefault();
   if (isPreciesActive.value) {
     invoke("unfreeze_mouse");
-    magnifierHighlighPosition.value = {
-      x: magnifierLensCanvasRef.value.offsetWidth / 2,
-      y: magnifierLensCanvasRef.value.offsetHeight / 2,
-    };
+    isPreciesActive.value = false;
   } else {
-    basePosition = { x: e.x, y: e.y };
+    basePosition = { ...magnifierPosition.value };
+
     invoke("freeze_mouse", { currentPos: basePosition });
+    isColorFinish.value = false;
+    isPreciesActive.value = true;
   }
 
-  isPreciesActive.value = !isPreciesActive.value;
+  resetPrecisePosition();
 }
 
 function onPreciseMouseMove(e: MouseEvent) {
@@ -275,9 +336,9 @@ function onPreciseMouseMove(e: MouseEvent) {
   };
 
   if (newPosition.x < 0) newPosition.x = 0;
-  if (newPosition.x >= 150) newPosition.x = 149;
+  if (newPosition.x >= CANVAS_SIZE) newPosition.x = CANVAS_SIZE - 1;
   if (newPosition.y < 0) newPosition.y = 0;
-  if (newPosition.y >= 150) newPosition.y = 149;
+  if (newPosition.y >= CANVAS_SIZE) newPosition.y = CANVAS_SIZE - 1;
 
   magnifierHighlighPosition.value = newPosition;
   const gridSize = magnifierGridSize.value;
@@ -303,6 +364,17 @@ function onPreciseMouseMove(e: MouseEvent) {
     y: basePosition.y + offsetDistance.y,
   });
 }
+
+function onPickFinish() {
+  if (isPreciesActive.value) {
+    invoke("unfreeze_mouse");
+    isPreciesActive.value = false;
+  } else {
+    resetPrecisePosition();
+  }
+
+  isColorFinish.value = !isColorFinish.value;
+}
 </script>
 
 <style scoped>
@@ -315,18 +387,11 @@ function onPreciseMouseMove(e: MouseEvent) {
   cursor: none;
 }
 
-.picker-magnifier,
-.picker-magnifier * {
-  cursor: none;
-  pointer-events: none;
-}
-
 .picker-magnifier {
   --crosshair-size: 30px;
 
   position: absolute;
   z-index: 100;
-  cursor: none;
 }
 
 .magnifier-cursor {
@@ -343,12 +408,10 @@ function onPreciseMouseMove(e: MouseEvent) {
   padding: 10px;
 
   top: 0;
-  left: calc(var(--crosshair-size) / 2 + 5px);
 
   width: 170px;
-  height: 400px;
 
-  background-color: rgb(130, 130, 130);
+  background-color: rgba(130, 130, 130, 0.132);
 
   display: flex;
   flex-direction: column;
@@ -356,12 +419,12 @@ function onPreciseMouseMove(e: MouseEvent) {
 }
 
 .magnifier-panel-holder {
-  width: 170px;
-  height: 170px;
-  min-width: 170px;
-  min-height: 170px;
+  width: v-bind("styles.canvasSize");
+  height: v-bind("styles.canvasSize");
+  min-width: v-bind("styles.canvasSize");
+  min-height: v-bind("styles.canvasSize");
 
-  border-radius: 5px;
+  border-radius: 3px;
   position: relative;
 
   overflow: hidden;
@@ -381,24 +444,24 @@ function onPreciseMouseMove(e: MouseEvent) {
 }
 
 .magnifier-lens-grid {
-  --magnifier-lens-grid-color: rgba(255, 255, 255, 0.2);
+  --magnifier-lens-grid-color: rgba(255, 255, 255, 1);
 
   position: absolute;
 
-  /* Set -1 to hide first grid line */
-  left: -1px;
-  top: -1px;
+  left: 0px;
+  top: 0px;
 
-  width: 100%;
-  height: 100%;
+  width: 200%;
+  height: 200%;
 
   background-image: repeating-linear-gradient(
-      var(--magnifier-lens-grid-color) 0 1px,
+      0deg,
+      var(--magnifier-lens-grid-color) 0 0%,
       transparent 1px 100%
     ),
     repeating-linear-gradient(
       90deg,
-      var(--magnifier-lens-grid-color) 0 1px,
+      var(--magnifier-lens-grid-color) 0 0,
       transparent 1px 100%
     );
 
@@ -422,5 +485,13 @@ function onPreciseMouseMove(e: MouseEvent) {
   height: 100%;
 
   z-index: 200;
+}
+
+.movement-path {
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  transform: translate(-50%, -50%);
 }
 </style>

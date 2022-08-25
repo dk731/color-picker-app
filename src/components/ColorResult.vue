@@ -71,6 +71,8 @@ function onResultClick(e: MouseEvent, conv: ConversionMeta) {
   const copyText = "Test";
   const clickDiv = e.target as HTMLDivElement;
 
+  console.log("Clicked: ", e, conv);
+
   // Ignore click if div is in animation
   if (clickDiv.classList.contains("dont-hover")) return;
 
@@ -126,12 +128,12 @@ function onResultClick(e: MouseEvent, conv: ConversionMeta) {
 }
 
 .result-clicked {
-  transform: scale(0.9);
+  transform: scale(0.9525);
   background-color: red;
 }
 
 .color-result:not(.dont-hover):hover {
-  transform: scale(1.1);
+  transform: scale(1.025);
   background-color: aqua;
 }
 
