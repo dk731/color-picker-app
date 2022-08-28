@@ -1,12 +1,15 @@
 <template>
   <div
-    class="color-holder"
+    class="color-holder reverse-container"
     ref="colorHolderRef"
     :onkeydown="onKeyDown"
     :onkeyup="onKeyUp"
     tabindex="0"
   >
-    <div class="color-result">
+    <div
+      class="color-result reversable-column"
+      :ref="(el) => elementsRefs.push(el as any)"
+    >
       <div>Current Color:</div>
       <flex-spacer />
       <div
@@ -18,8 +21,9 @@
     </div>
     <div
       v-for="converter in colorConversionMap"
-      class="color-result"
+      class="color-result reversable-column"
       v-on:click="(e) => onResultClick(e, converter)"
+      :ref="(el) => elementsRefs.push(el as any)"
     >
       <div>{{ converter.displayName }}</div>
       <flex-spacer></flex-spacer>
@@ -35,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineProps } from "vue";
+import { ref, defineProps, onMounted } from "vue";
 
 import { RGB } from "color-convert/conversions";
 
@@ -54,10 +58,21 @@ import {
 
 const isSpecialActive = ref<boolean>(false);
 const colorHolderRef = ref<HTMLDivElement>(null as any);
+const elementsRefs = ref<HTMLDivElement[]>([]);
 
 const { activeColor, onColorCopyCallback } = defineProps<{
   activeColor: RGB;
   onColorCopyCallback?: (copyText: string) => void;
+}>();
+
+const emit = defineEmits<{
+  (
+    e: "onMounted",
+    {
+      holderRef: [],
+      elementsRef: [],
+    }
+  ): void;
 }>();
 
 function onKeyDown(e: KeyboardEvent) {
@@ -88,6 +103,13 @@ function onResultClick(e: MouseEvent, conv: ConversionMeta) {
   navigator.clipboard.writeText(copyText); // Copy selected color to clipboard
   if (onColorCopyCallback) onColorCopyCallback(copyText);
 }
+
+onMounted(() => {
+  emit("onMounted", {
+    holderRef: [colorHolderRef.value],
+    elementsRef: [elementsRefs.value],
+  });
+});
 </script>
 
 <style scoped>

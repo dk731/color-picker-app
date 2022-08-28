@@ -19,14 +19,19 @@
     }"
   >
     <icon class="magnifier-cursor" icon="radix-icons:crosshair-2"></icon>
-    <svg viewBox="0 0 60 50" width="60" class="movement-path">
+    <svg
+      style="opacity: 0; pointer-events: none"
+      viewBox="0 0 60 50"
+      width="60"
+      class="movement-path"
+    >
       <path
         id="panel-position-path"
         d="M52,0H8C3.6,0,0,3.6,0,8v34c0,4.4,3.6,8,8,8h44c4.4,0,8-3.6,8-8V8C60,3.6,56.4,0,52,0L52,0z"
       />
     </svg>
-    <div class="magnifier-panel">
-      <div class="magnifier-panel-holder">
+    <div class="magnifier-panel reverse-container" ref="magnifierPanelRef">
+      <div class="magnifier-panel-holder reversable-column">
         <canvas class="magnifier-lens" ref="magnifierLensCanvasRef"></canvas>
         <div
           class="magnifier-lens-grid"
@@ -53,7 +58,10 @@
           }"
         ></div>
       </div>
-      <color-result :active-color="activeColor"></color-result>
+      <color-result
+        :active-color="activeColor"
+        @on-mounted="qwe"
+      ></color-result>
       <flex-spacer />
     </div>
   </div>
@@ -88,6 +96,10 @@ unregisterAll().then(() =>
   register("Esc", (short) => router.replace({ name: "MainApp" }))
 );
 
+function qwe(el: any) {
+  console.log(el);
+}
+
 // Define base magnifier sizes
 const magnifierViewSize = ref<number>(11);
 
@@ -96,6 +108,8 @@ const baseCanvasRef = ref<HTMLCanvasElement>(null as any);
 // On base canvas mouse move (as canvas is fullscreen -> global mouse listener)
 const CANVAS_SIZE = 170;
 const onMouseMove = ref<(e: MouseEvent) => void>();
+
+const magnifierPanelRef = ref<HTMLDivElement>(null as any);
 
 const magnifierLensCanvasRef = ref<HTMLCanvasElement>(null as any);
 const magnifierGridSize = ref<number>(0);
@@ -188,36 +202,160 @@ function resetPrecisePosition() {
   };
 }
 
+var currentSnapPoint: number;
+const currentPosition: { start: number; end: number } = { start: 0, end: 0 };
 var previousTween: gsap.core.Tween;
-const halfArc = Math.PI * 2;
-const pathLength = Math.PI * 2 * 8 + 88 + 68;
+const arcRadius = 8;
+const sideLength = 60;
+const sideHeight = 50;
+
+const halfArc = (2 * Math.PI * arcRadius) / 8;
+const widthSize = sideLength - arcRadius * 2 + halfArc * 2;
+const heightSize = sideHeight - arcRadius * 2 + halfArc * 2;
+const pathLength = widthSize * 2 + heightSize * 2;
 const SNAP_POINTS = [
-  44 + halfArc,
-  44 + halfArc * 3 + 34,
-  44 + halfArc * 5 + 34 + 44,
-  44 + halfArc * 7 + 34 + 44 + 34,
-].map((el) => el / pathLength);
+  widthSize,
+  widthSize + heightSize,
+  2 * widthSize + heightSize,
+  2 * widthSize + 2 * heightSize,
+].map((el) => (el - halfArc) / pathLength);
+
+const tl = gsap.timeline();
+const reverseContainers: any[] = [];
+const reverseBoxes: any[] = [];
+var currentFlexReversed: boolean;
+
+function animateFlexItem(box: any) {
+  var lastX = box.x;
+  var lastY = box.y;
+
+  box.x = box.node.offsetLeft;
+  box.y = box.node.offsetTop;
+
+  // Continue if box hasn't moved
+  if (lastX === box.x && lastY === box.y) return;
+
+  // Reversed delta values taking into account current transforms
+  var x = gsap.getProperty(box.node, "x") + lastX - box.x;
+  var y = gsap.getProperty(box.node, "y") + lastY - box.y;
+
+  // Tween to 0 to remove the transforms
+  gsap.fromTo(
+    box.node,
+    { x, y },
+    { duration: 1, x: 0, y: 0, ease: "power2.out" }
+  );
+}
 
 function updateMagnifierPanelPosition(newPosition: Coord2D) {
-  if (previousTween) previousTween.kill();
-  const ind = Math.floor(Math.random() * 4);
-  previousTween = gsap.to(".magnifier-panel", {
-    duration: 2,
-    ease: "power1.inOut",
-    repeat: 100,
-    repeatDelay: 1,
-    motionPath: {
-      path: "#panel-position-path",
-      align: "#panel-position-path",
-      start: 0,
-      end: SNAP_POINTS[3] - 1,
-    },
-  });
+  // Determine new snap point, skip if no need to change position
+  var newSnapPoint = 2;
+  if (
+    newPosition.x >
+      baseCanvasSize.width -
+        (magnifierPanelRef.value.clientWidth + widthSize / 2) &&
+    newPosition.y >
+      baseCanvasSize.height -
+        (magnifierPanelRef.value.clientHeight + heightSize / 2)
+  )
+    newSnapPoint = 0;
+  else if (
+    newPosition.x >
+      baseCanvasSize.width -
+        (magnifierPanelRef.value.clientWidth + widthSize / 2) &&
+    newPosition.y < magnifierPanelRef.value.clientHeight + heightSize / 2
+  )
+    newSnapPoint = 1;
+  else if (
+    newPosition.x < magnifierPanelRef.value.clientWidth + widthSize / 2 &&
+    newPosition.y < magnifierPanelRef.value.clientHeight + heightSize / 2
+  )
+    newSnapPoint = 2;
+  else if (
+    newPosition.x < magnifierPanelRef.value.clientWidth + widthSize / 2 &&
+    newPosition.y >
+      baseCanvasSize.height -
+        (magnifierPanelRef.value.clientHeight + heightSize / 2)
+  )
+    newSnapPoint = 3;
+
+  if (newSnapPoint === currentSnapPoint) return;
+
+  var destinationValue = SNAP_POINTS[newSnapPoint];
+  var startValue = destinationValue;
+  const panelTween = tl.getTweensOf(".magnifier-panel");
+  const newFlexReversed = newSnapPoint == 0 || newSnapPoint == 3;
+
+  if (panelTween.length > 0) {
+    startValue =
+      currentPosition.start +
+      (currentPosition.end - currentPosition.start) * panelTween[0].ratio;
+
+    if (
+      Math.abs(destinationValue - startValue) >
+      Math.abs(destinationValue - 1 - startValue)
+    )
+      destinationValue -= 1;
+
+    // previousTween.kill();
+    tl.clear();
+
+    tl.to(".magnifier-panel", {
+      duration: 0.5,
+      ease: "power1.inOut",
+      xPercent: newSnapPoint < 2 ? -100 : 0,
+      yPercent: newSnapPoint == 3 || newSnapPoint == 0 ? -100 : 0,
+      motionPath: {
+        path: "#panel-position-path",
+        align: "#panel-position-path",
+        start: startValue,
+        end: destinationValue,
+      },
+    });
+  } else {
+    currentFlexReversed = false;
+    tl.to(".magnifier-panel", {
+      duration: 0,
+      motionPath: {
+        path: "#panel-position-path",
+        align: "#panel-position-path",
+        end: destinationValue,
+      },
+    });
+  }
+
+  if (newFlexReversed != currentFlexReversed) {
+    if (currentFlexReversed)
+      reverseContainers.forEach((el) => el.classList.remove("reverse"));
+    else reverseContainers.forEach((el) => el.classList.add("reverse"));
+
+    reverseBoxes.forEach((el) => animateFlexItem(el));
+  }
+
+  currentFlexReversed = newFlexReversed;
+  currentPosition.start = startValue;
+  currentPosition.end = destinationValue;
+  currentSnapPoint = newSnapPoint;
 }
 
 onMounted(() => {
-  const pathRef = document.getElementById("panel-position-path");
-  console.log(pathRef);
+  const nodes = document.querySelectorAll(".reversable-column");
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i] as any;
+
+    gsap.set(node, { x: 0, y: 0 });
+    reverseBoxes.push({
+      x: node.offsetLeft,
+      y: node.offsetTop,
+      node,
+    });
+  }
+
+  document
+    .querySelectorAll(".reverse-container")
+    .forEach((el) => reverseContainers.push(el));
+
+  console.log(reverseBoxes, reverseContainers);
 
   // Setup base canvas for displaying all captured screenshots
   const baseCtx = baseCanvasRef.value.getContext("2d")!;
@@ -493,5 +631,15 @@ function onPickFinish() {
   top: 0;
 
   transform: translate(-50%, -50%);
+}
+
+.flex-col-reverse {
+  flex-direction: column-reverse;
+}
+</style>
+
+<style>
+.reverse-container.reverse {
+  flex-direction: column-reverse;
 }
 </style>
