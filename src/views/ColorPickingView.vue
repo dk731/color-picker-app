@@ -176,8 +176,7 @@ var baseCanvasCache: Uint8ClampedArray = null as any;
 function updateActiveColor(currentPosition: Coord2D) {
   // Get current color
   const globalStartByte =
-    (currentPosition.x + (currentPosition.y - 1) * baseCanvasSize.width - 1) *
-    4; // Each pixel is 4 bytes (rgba)
+    (currentPosition.x + 1 + currentPosition.y * baseCanvasSize.width - 1) * 4; // Each pixel is 4 bytes (rgba)
   const currentActiveColor: RGB = [
     baseCanvasCache[globalStartByte + 0],
     baseCanvasCache[globalStartByte + 1],
@@ -243,41 +242,43 @@ function animateFlexItem(box: any) {
   gsap.fromTo(
     box.node,
     { x, y },
-    { duration: 1, x: 0, y: 0, ease: "power2.out" }
+    { duration: 0.25, x: 0, y: 0, ease: "power2.out" }
   );
 }
 
 function updateMagnifierPanelPosition(newPosition: Coord2D) {
   // Determine new snap point, skip if no need to change position
-  var newSnapPoint = 2;
+  var newSnapPoint = 0;
   if (
-    newPosition.x >
+    newPosition.x <
       baseCanvasSize.width -
         (magnifierPanelRef.value.clientWidth + widthSize / 2) &&
-    newPosition.y >
+    newPosition.y <
       baseCanvasSize.height -
         (magnifierPanelRef.value.clientHeight + heightSize / 2)
-  )
-    newSnapPoint = 0;
-  else if (
-    newPosition.x >
-      baseCanvasSize.width -
-        (magnifierPanelRef.value.clientWidth + widthSize / 2) &&
-    newPosition.y < magnifierPanelRef.value.clientHeight + heightSize / 2
-  )
-    newSnapPoint = 1;
-  else if (
-    newPosition.x < magnifierPanelRef.value.clientWidth + widthSize / 2 &&
-    newPosition.y < magnifierPanelRef.value.clientHeight + heightSize / 2
   )
     newSnapPoint = 2;
-  else if (
-    newPosition.x < magnifierPanelRef.value.clientWidth + widthSize / 2 &&
-    newPosition.y >
-      baseCanvasSize.height -
-        (magnifierPanelRef.value.clientHeight + heightSize / 2)
-  )
-    newSnapPoint = 3;
+  else {
+    if (
+      newPosition.x >
+      baseCanvasSize.width -
+        (magnifierPanelRef.value.clientWidth + widthSize / 2)
+    )
+      newSnapPoint =
+        newPosition.y >
+        baseCanvasSize.height -
+          (magnifierPanelRef.value.clientHeight + heightSize / 2)
+          ? 0
+          : 1;
+    else {
+      newSnapPoint =
+        newPosition.x >
+        baseCanvasSize.width -
+          (magnifierPanelRef.value.clientWidth + widthSize / 2)
+          ? 0
+          : 3;
+    }
+  }
 
   if (newSnapPoint === currentSnapPoint) return;
 
@@ -301,7 +302,7 @@ function updateMagnifierPanelPosition(newPosition: Coord2D) {
     tl.clear();
 
     tl.to(".magnifier-panel", {
-      duration: 0.5,
+      duration: 0.25,
       ease: "power1.inOut",
       xPercent: newSnapPoint < 2 ? -100 : 0,
       yPercent: newSnapPoint == 3 || newSnapPoint == 0 ? -100 : 0,
@@ -314,8 +315,7 @@ function updateMagnifierPanelPosition(newPosition: Coord2D) {
     });
   } else {
     currentFlexReversed = false;
-    tl.to(".magnifier-panel", {
-      duration: 0,
+    tl.set(".magnifier-panel", {
       motionPath: {
         path: "#panel-position-path",
         align: "#panel-position-path",
@@ -414,11 +414,18 @@ onMounted(() => {
 
       updateMagnifierPanelPosition(newPosition);
 
+      magnifierCtx.rect(
+        0,
+        0,
+        magnifierEl.offsetWidth,
+        magnifierEl.offsetHeight
+      );
+      magnifierCtx.fill();
       // Copy interested base rect to magnifier canvas
       magnifierCtx.drawImage(
         baseCtx.canvas,
-        e.x - magnifierRounded,
-        e.y - magnifierRounded,
+        e.x - magnifierRounded + 1,
+        e.y - magnifierRounded + 1,
         Math.round(magnifierViewSize.value),
         Math.round(magnifierViewSize.value),
         0,
@@ -478,7 +485,6 @@ function onPreciseMouseMove(e: MouseEvent) {
   if (newPosition.y < 0) newPosition.y = 0;
   if (newPosition.y >= CANVAS_SIZE) newPosition.y = CANVAS_SIZE - 1;
 
-  magnifierHighlighPosition.value = newPosition;
   const gridSize = magnifierGridSize.value;
   const offsetDistance = {
     x:
@@ -496,6 +502,24 @@ function onPreciseMouseMove(e: MouseEvent) {
           (gridSize * 2)
       ) + 1,
   };
+
+  if (
+    basePosition.x + offsetDistance.x < leftUpper.x ||
+    basePosition.x + offsetDistance.x > rightBottom.x
+  )
+    offsetDistance.x = 0;
+
+  if (
+    basePosition.y + offsetDistance.y < leftUpper.y ||
+    basePosition.y + offsetDistance.y > rightBottom.y
+  )
+    offsetDistance.y = 0;
+
+  magnifierHighlighPosition.value = newPosition;
+  // magnifierHighlighPosition.value = {
+  //   x: magnifierPanelRef.value.clientWidth / 2 + offsetDistance.x * gridSize,
+  //   y: magnifierPanelRef.value.clientHeight / 2 + offsetDistance.y * gridSize,
+  // };
 
   updateActiveColor({
     x: basePosition.x + offsetDistance.x,
@@ -549,7 +573,7 @@ function onPickFinish() {
 
   width: 170px;
 
-  background-color: rgba(130, 130, 130, 0.132);
+  background-color: rgb(130, 130, 130);
 
   display: flex;
   flex-direction: column;
