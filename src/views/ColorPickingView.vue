@@ -42,18 +42,15 @@
         <div
           class="magnifier-active-highligh"
           :style="{
-            left: `${
-              Math.floor(magnifierHighlighPosition.x / magnifierGridSize) *
-                magnifierGridSize -
-              0.5
-            }px`,
-            top: `${
-              Math.floor(magnifierHighlighPosition.y / magnifierGridSize) *
-                magnifierGridSize -
-              0.5
-            }px`,
+            left: `${Math.floor(
+              magnifierHighlighPosition.x * magnifierGridSize
+            )}px`,
+            top: `${Math.floor(
+              magnifierHighlighPosition.y * magnifierGridSize
+            )}px`,
             width: `${magnifierGridSize + 1}px`,
             height: `${magnifierGridSize + 1}px`,
+            transform: 'translate(-50%, -50%)',
             borderColor: `rgb(${magnifierHighlighColor.join(', ')})`,
           }"
         ></div>
@@ -196,8 +193,8 @@ function updateActiveColor(currentPosition: Coord2D) {
 
 function resetPrecisePosition() {
   magnifierHighlighPosition.value = {
-    x: magnifierLensCanvasRef.value.offsetWidth / 2,
-    y: magnifierLensCanvasRef.value.offsetHeight / 2,
+    x: magnifierViewSize.value / 2,
+    y: magnifierViewSize.value / 2,
   };
 }
 
@@ -315,7 +312,8 @@ function updateMagnifierPanelPosition(newPosition: Coord2D) {
     });
   } else {
     currentFlexReversed = false;
-    tl.set(".magnifier-panel", {
+    tl.to(".magnifier-panel", {
+      duration: 0,
       motionPath: {
         path: "#panel-position-path",
         align: "#panel-position-path",
@@ -449,8 +447,11 @@ function onMouseZoom(e: WheelEvent) {
   magnifierViewSize.value = newValue;
   magnifierGridSize.value = magnifierLensCanvasRef.value.offsetWidth / newValue;
   onMouseMove.value!({ x: e.clientX, y: e.clientY } as any);
+
+  resetPrecisePosition();
 }
 
+var preciseMouseOffset = { x: 0, y: 0 };
 var basePosition: Coord2D = { x: 0, y: 0 };
 function onContextClick(e: MouseEvent) {
   e.preventDefault();
@@ -461,6 +462,7 @@ function onContextClick(e: MouseEvent) {
     basePosition = { ...magnifierPosition.value };
 
     invoke("freeze_mouse", { currentPos: basePosition });
+    preciseMouseOffset = { x: 0, y: 0 };
     isColorFinish.value = false;
     isPreciesActive.value = true;
   }
@@ -471,59 +473,57 @@ function onContextClick(e: MouseEvent) {
 function onPreciseMouseMove(e: MouseEvent) {
   invoke("freeze_mouse_update");
   const currentMovement = { x: e.x - 300, y: e.y - 300 };
-  const newPosition = {
-    x:
-      magnifierHighlighPosition.value.x +
-      currentMovement.x * preciseSensivity.value,
-    y:
-      magnifierHighlighPosition.value.y +
-      currentMovement.y * preciseSensivity.value,
-  };
+  const prevPosition = { ...preciseMouseOffset };
+  preciseMouseOffset.x += currentMovement.x * preciseSensivity.value;
+  preciseMouseOffset.y += currentMovement.y * preciseSensivity.value;
 
-  if (newPosition.x < 0) newPosition.x = 0;
-  if (newPosition.x >= CANVAS_SIZE) newPosition.x = CANVAS_SIZE - 1;
-  if (newPosition.y < 0) newPosition.y = 0;
-  if (newPosition.y >= CANVAS_SIZE) newPosition.y = CANVAS_SIZE - 1;
-
-  const gridSize = magnifierGridSize.value;
-  const offsetDistance = {
-    x:
-      Math.floor(
-        (2 * newPosition.x -
-          magnifierLensCanvasRef.value.offsetWidth -
-          gridSize) /
-          (gridSize * 2)
-      ) + 1,
-    y:
-      Math.floor(
-        (2 * newPosition.y -
-          magnifierLensCanvasRef.value.offsetHeight -
-          gridSize) /
-          (gridSize * 2)
-      ) + 1,
+  const pixelsOffset = {
+    x: Math.floor(preciseMouseOffset.x / magnifierGridSize.value),
+    y: Math.floor(preciseMouseOffset.y / magnifierGridSize.value),
   };
 
   if (
-    basePosition.x + offsetDistance.x < leftUpper.x ||
-    basePosition.x + offsetDistance.x > rightBottom.x
+    basePosition.x + pixelsOffset.x < leftUpper.x ||
+    basePosition.x + pixelsOffset.x > rightBottom.x
   )
-    offsetDistance.x = 0;
+    pixelsOffset.x = 0;
 
   if (
-    basePosition.y + offsetDistance.y < leftUpper.y ||
-    basePosition.y + offsetDistance.y > rightBottom.y
+    basePosition.y + pixelsOffset.y < leftUpper.y ||
+    basePosition.y + pixelsOffset.y > rightBottom.y
   )
-    offsetDistance.y = 0;
+    pixelsOffset.y = 0;
 
-  magnifierHighlighPosition.value = newPosition;
+  const newHighlightPosition = {
+    x: magnifierViewSize.value,
+    y: magnifierViewSize.value,
+  };
+
+  // if (newHighlightPosition.x < 0.5) {
+  //   preciseMouseOffset.x = prevPosition.x;
+  //   newHighlightPosition.x = 0.5;
+  // } else if (newHighlightPosition.x > magnifierGridSize.value / 2) {
+  //   preciseMouseOffset.x = prevPosition.x;
+  //   newHighlightPosition.x = magnifierGridSize.value / 2;
+  // }
+  // if (newHighlightPosition.y < 0.5) {
+  //   preciseMouseOffset.y = prevPosition.y;
+  //   newHighlightPosition.y = 0.5;
+  // } else if (newHighlightPosition.y > magnifierGridSize.value / 2) {
+  //   preciseMouseOffset.y = prevPosition.y;
+  //   newHighlightPosition.y = magnifierGridSize.value / 2;
+  // }
+
+  magnifierHighlighPosition.value = newHighlightPosition;
+  // console.log(pixelsOffset);
   // magnifierHighlighPosition.value = {
   //   x: magnifierPanelRef.value.clientWidth / 2 + offsetDistance.x * gridSize,
   //   y: magnifierPanelRef.value.clientHeight / 2 + offsetDistance.y * gridSize,
   // };
 
   updateActiveColor({
-    x: basePosition.x + offsetDistance.x,
-    y: basePosition.y + offsetDistance.y,
+    x: basePosition.x + pixelsOffset.x,
+    y: basePosition.y + pixelsOffset.y,
   });
 }
 
