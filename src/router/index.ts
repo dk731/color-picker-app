@@ -5,12 +5,17 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "main_app",
+      redirect: "color_pick",
     },
     {
       path: "/main_app",
       name: "MainApp",
       component: () => import("../views/MainAppView.vue"),
+    },
+    {
+      path: "/color_pick",
+      name: "ColorPick",
+      component: () => import("../views/ColorPickingView.vue"),
     },
   ],
 });

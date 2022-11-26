@@ -1,10 +1,21 @@
 <template>
   <router-view></router-view>
+  <!-- <div
+    :style="{ height: '20px', background: 'red' }"
+    data-tauri-drag-region
+  ></div>
+  <color-result :active-color="[100, 200, 55]"></color-result> -->
 </template>
 
 <script setup lang="ts">
-import { availableMonitors, getCurrent, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window"
-import FlexSpacer from "./components/FlexSpacer.vue"
+import {
+  availableMonitors,
+  getCurrent,
+  PhysicalPosition,
+  PhysicalSize,
+} from "@tauri-apps/api/window";
+import FlexSpacer from "./components/FlexSpacer.vue";
+import ColorResult from "./components/ColorResult.vue";
 
 // const qwe = availableMonitors()
 
@@ -23,5 +34,3 @@ import FlexSpacer from "./components/FlexSpacer.vue"
 
 // console.log(qwe)
 </script>
-
-

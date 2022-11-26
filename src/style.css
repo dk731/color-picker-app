@@ -1,8 +1,8 @@
 :root {
   --main-color: rgba(77, 79, 86, 0.5);
-  --main-color-strong: rgba(61, 62, 68, 0.5);
+  --main-color-strong: rgba(61, 62, 68, 0.3);
   --main-color-strong-strong: rgba(34, 34, 37, 0.8);
-  --main-color-light: rgba(133, 137, 148, 0.5);
+  --main-color-light: rgba(52, 56, 68, 0.4);
 
 }
 
@@ -12,6 +12,7 @@ body, #app {
 
   width: 100vw;
   height: 100vh;
+  overflow: hidden;
 }
 
 * {
